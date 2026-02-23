@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Submission Q&A
 
-## Getting Started
+### 1. The "Under the Hood" Moment
 
-First, run the development server:
+The trickiest issue was the Gemini API occasionally wrapping its JSON response in markdown code fences (` ```json ... ``` `), which caused `JSON.parse` to throw a `SyntaxError`. The problem was intermittent — it happened on some queries but not others, making it hard to reproduce.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+I debugged it by logging `result.response.text()` raw in the API route and comparing successful vs failing responses. The pattern was clear: Gemini was treating the JSON format instruction like a markdown task and wrapping the output. The fix was a single pre-process strip before parsing:
+
+```ts
+const cleaned = text.replace(/```json|```/g, "").trim();
+const parsed = JSON.parse(cleaned);
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+After that, combined with `temperature: 0` for deterministic output, the parsing became fully stable.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 2. The Scalability Thought
 
-## Learn More
+With 5 items, passing the full inventory in every prompt is fine. At 50,000 packages it would be too expensive and would exceed context limits.
 
-To learn more about Next.js, take a look at the following resources:
+My approach:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **Pre-compute embeddings** for every inventory item (title + tags + location concatenated) using an embedding model like `text-embedding-004` and store them in a vector database (Pinecone, Supabase pgvector, or Weaviate).
+2. **On each query**, embed the user's request and run a **top-k similarity search** (k ≈ 10–15) to retrieve the most semantically relevant candidates.
+3. **Pass only those candidates** to Gemini with the same grounding prompt. This keeps the prompt short, the cost low, and the quality high.
+4. **Cache** embeddings for the inventory (they only change when the data changes). Cache identical user queries with a short TTL (e.g. Redis) to avoid redundant LLM calls.
+5. **Keyword pre-filter** as a fast path — if a query clearly matches a single tag or location, return those directly without calling the LLM at all.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This hybrid retrieval pattern keeps latency under 500ms and cost near zero for repeat queries.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3. The AI Reflection
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+I used **GitHub Copilot** throughout the build for boilerplate, component scaffolding, and Zod schema generation.
+
+One bad suggestion: when setting up the Gemini client, Copilot autocompleted the model name as `"gemini-pro"` (an older deprecated identifier). The app compiled fine but threw a `404 Not Found` at runtime when calling `generateContent`. I spent time initially suspecting my API key before checking the raw error body, which said the model name was invalid. I corrected it to `"gemini-2.0-flash"` after checking the current model list in the [Google AI Studio docs](https://ai.google.dev/gemini-api/docs/models/gemini).
+
+The lesson: AI autocomplete confidently fills in plausible-looking strings — always verify API identifiers against official documentation rather than trusting autocomplete.
+
+---
+
+## Deployment
+
+Deployed on Vercel. Set the `GEMINI_API_KEY` environment variable in your Vercel project settings under **Settings → Environment Variables**.
+
+```bash
+vercel deploy
+```
+
