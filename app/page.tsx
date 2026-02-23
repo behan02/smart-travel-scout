@@ -28,14 +28,6 @@ export default function Home() {
     setLoading(false);
   };
 
-  let inventory1 = [
-    {"id": 1, "title": "High-Altitude Tea Trails", "location": "Nuwara Eliya", "price": 120, "tags": ["cold", "nature", "hiking"]},
-    {"id": 2, "title": "Coastal Heritage Wander", "location": "Galle Fort", "price": 45, "tags": ["history", "culture", "walking"]},
-    {"id": 3, "title": "Wild Safari Expedition", "location": "Yala", "price": 250, "tags": ["animals", "adventure", "photography"]},
-    {"id": 4, "title": "Surf & Chill Retreat", "location": "Arugam Bay", "price": 80, "tags": ["beach", "surfing", "young-vibe"]},
-    {"id": 5, "title": "Ancient City Exploration", "location": "Sigiriya", "price": 110, "tags": ["history", "climbing", "view"]}
-]
-
   return (
     <div className="min-h-screen text-center p-10">
       <h1 className="text-3xl font-bold text-gray-800">Smart Travel Scout</h1>
@@ -55,12 +47,12 @@ export default function Home() {
       {loading && <p className="text-sm text-gray-500 mt-4">Thinking...</p>}
 
       <div className="w-lg max-w-md mx-auto mt-8 text-left">
-        {inventory1.map((r) => (
+        {results.map((r) => (
           <div key={r.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200 m-2">
             <h3 className="text-lg font-semibold text-gray-800">{r.title}</h3>
             <p className="text-sm text-gray-500 mt-1">📍 {r.location}</p>
             <p className="text-indigo-600 font-bold mt-2">${r.price} <span className="text-gray-400 font-normal text-xs">/ person</span></p>
-            {/* <p className="text-sm text-gray-600 mt-3 border-t pt-3">{r.reason}</p> */}
+            <p className="text-sm text-gray-600 mt-3 border-t pt-3">{r.reason}</p>
           </div>
         ))}
       </div>
